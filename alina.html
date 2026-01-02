@@ -66,6 +66,7 @@
         #canvas-container{
             width:94vw;
             max-width:1000px;
+            position:relative;
         }
         canvas{
             width:100%;
@@ -95,6 +96,8 @@
             font-size:0.95rem;
             font-family:"Ubuntu Mono",ui-monospace,Menlo,Consolas,monospace;
             transition: all 0.3s;
+            position:relative;
+            overflow:hidden;
         }
         .miss-you-btn:hover{
             background:#444444;
@@ -190,6 +193,24 @@
             font-size:0.8rem;
             opacity:0.7;
             text-align:center;
+        }
+
+        @keyframes float-up {
+            0% {
+                opacity: 1;
+                transform: translateY(0) translateX(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-80px) translateX(var(--tx)) scale(0.3);
+            }
+        }
+
+        .floating-heart {
+            position: fixed;
+            font-size: 1.5rem;
+            pointer-events: none;
+            animation: float-up 1.2s ease-out forwards;
         }
     </style>
 </head>
@@ -306,8 +327,15 @@ const container = document.getElementById('canvas-container');
 function resizeCanvas(){
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const desiredH = Math.min(vh*0.55, 500);
-    container.style.height = desiredH + 'px';
+    
+    // Calculate desired height based on line distance + 25%
+    const lineOffset = 0.08 / 3.5 / 2; // divided by 2 for 2x closer
+    const lineSeparation = lineOffset * 2;
+    const arcRadiusMax = (Math.max(BOTTOM_DURATION, TOP_DURATION) / 2 / TOTAL_DURATION) * 400; // rough estimate
+    const contentHeight = lineSeparation + arcRadiusMax * 2;
+    const desiredH = contentHeight * 1.25;
+    
+    container.style.height = Math.min(desiredH, vh * 0.55) + 'px';
 
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -382,7 +410,7 @@ function drawWire(opts){
     }
 
     function strokeSegment(t0,t1,color){
-        const steps = 600; // 2x more smoothing
+        const steps = 600;
         ctx.beginPath();
         for(let i=0;i<=steps;i++){
             const t = t0 + (t1-t0)*i/steps;
@@ -445,8 +473,9 @@ function drawScene(){
         nowRaw < TIMELINE_START ? TIMELINE_START :
         nowRaw > TIMELINE_END   ? TIMELINE_END   : nowRaw;
 
+    // 2x closer to each other
     const centerY = height*0.5;
-    const offset  = height*0.08 / 3.5;
+    const offset  = (height*0.08 / 3.5) / 2;
 
     const bottomRadiusTime = BOTTOM_DURATION/2;
     const topRadiusTime    = TOP_DURATION/2;
@@ -480,7 +509,7 @@ function drawScene(){
     });
 }
 
-/* ---------- MISS YOU BUTTON ---------- */
+/* ---------- MISS YOU BUTTON WITH HEART ANIMATION ---------- */
 const missYouBtn = document.getElementById('miss-you-btn');
 let missYouCount = 0;
 
@@ -498,10 +527,35 @@ function updateMissYouDisplay(){
     }
 }
 
+function createFloatingHearts(){
+    const rect = missYouBtn.getBoundingClientRect();
+    const numHearts = 5;
+    
+    for(let i = 0; i < numHearts; i++){
+        const heart = document.createElement('div');
+        heart.className = 'floating-heart';
+        heart.textContent = '❤️';
+        
+        // Random horizontal offset
+        const tx = (Math.random() - 0.5) * 100;
+        heart.style.setProperty('--tx', tx + 'px');
+        
+        // Position at button
+        heart.style.left = (rect.left + rect.width/2) + 'px';
+        heart.style.top = (rect.top + rect.height/2) + 'px';
+        
+        document.body.appendChild(heart);
+        
+        // Remove after animation
+        setTimeout(() => heart.remove(), 1200);
+    }
+}
+
 missYouBtn.onclick = () => {
     missYouCount++;
     localStorage.setItem('missYouCount', missYouCount);
     updateMissYouDisplay();
+    createFloatingHearts();
     missYouBtn.classList.add('active');
     setTimeout(() => missYouBtn.classList.remove('active'), 300);
 };
@@ -576,4 +630,3 @@ setInterval(drawScene, 1000);
 </script>
 </body>
 </html>
-
