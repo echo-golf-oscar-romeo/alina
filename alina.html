@@ -188,7 +188,7 @@ function timeToX(t, width){
     return ((clamped - TIMELINE_START)/TOTAL_DURATION)*width;
 }
 
-/* Core drawing for one wire with PERFECT half-circle arc */
+/* Core drawing for one wire with perfect half-circle arc */
 function drawWire(opts){
     const {
         yBase,
@@ -219,54 +219,36 @@ function drawWire(opts){
     const radiusFrac = arcRadiusTime / globalDuration;
     const arcRadiusPx = radiusFrac * width;
 
-    const nowX = timeToX(now, width);
-
-    // Perfect half-circle: center at midpoint horizontally
+    // Arc center X at midpoint
     const arcCenterX = startX + (endX-startX)*tAbsMid;
-    const arcCenterY = isTop ? yBase - arcRadiusPx : yBase + arcRadiusPx;
 
     // path in parameter t ∈ [0,1]
     function path(t){
         const x = startX + (endX-startX)*t;
-        let y;
+        let y = yBase;
 
-        if(t <= tAbsStart || t >= tAbsEnd){ 
-            // straight sections
-            y = yBase;
-        }else { 
+        if(t > tAbsStart && t < tAbsEnd){ 
             // half-circle arc
             const rel = (t - tAbsStart)/(tAbsEnd - tAbsStart); // 0..1
             
             if(isTop){
-                // Top arc goes UP: starts from left (angle π), goes to right (angle 0)
+                // Top arc points UP: arc goes above the baseline
+                // Center is BELOW the baseline by arcRadiusPx
+                const arcCenterY = yBase - arcRadiusPx;
+                // Angle from 0 (right) to π (left)
                 const angle = Math.PI * (1 - rel);
-                const arcX = arcCenterX + arcRadiusPx * Math.cos(angle);
-                const arcY = arcCenterY + arcRadiusPx * Math.sin(angle);
-                y = arcY;
+                y = arcCenterY + arcRadiusPx * Math.sin(angle);
             }else{
-                // Bottom arc goes DOWN: starts from left (angle 0), goes to right (angle π)
-                const angle = Math.PI * rel;
-                const arcX = arcCenterX + arcRadiusPx * Math.cos(angle);
-                const arcY = arcCenterY + arcRadiusPx * Math.sin(angle);
-                y = arcY;
+                // Bottom arc points DOWN: arc goes below the baseline
+                // Center is ABOVE the baseline by arcRadiusPx
+                const arcCenterY = yBase + arcRadiusPx;
+                // Angle from 0 (right) to π (left), but sin gives opposite direction
+                const angle = Math.PI * (1 - rel);
+                y = arcCenterY - arcRadiusPx * Math.sin(angle);
             }
         }
 
         return {x,y};
-    }
-
-    // 10x more smoothing
-    function smoothPath(t){
-        const samples = 20; // 10x more samples
-        let sumX = 0, sumY = 0;
-        for(let i = 0; i < samples; i++){
-            const eps = (i - samples/2 + 0.5) * 0.005;
-            const tt = Math.max(0, Math.min(1, t + eps));
-            const p = path(tt);
-            sumX += p.x;
-            sumY += p.y;
-        }
-        return {x: sumX/samples, y: sumY/samples};
     }
 
     function strokeSegment(t0,t1,color){
@@ -274,7 +256,7 @@ function drawWire(opts){
         ctx.beginPath();
         for(let i=0;i<=steps;i++){
             const t = t0 + (t1-t0)*i/steps;
-            const {x,y} = smoothPath(t);
+            const {x,y} = path(t);
             if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
         }
         ctx.strokeStyle = color;
@@ -296,9 +278,9 @@ function drawWire(opts){
     ctx.shadowBlur = 2;
     strokeSegment(tSplit, 1, colorFuture);
 
-    // glowing current marker – smaller and more concentrated
-    const {x:mx,y:my} = smoothPath(tSplit);
-    const markerRadius = Math.max(6, Math.min(10, width*0.008));
+    // glowing current marker – smaller
+    const {x:mx,y:my} = path(tSplit);
+    const markerRadius = Math.max(4, Math.min(7, width*0.005));
     const g = ctx.createRadialGradient(mx,my,0,mx,my,markerRadius*1.4);
     g.addColorStop(0,'rgba(255,255,255,0.92)');
     g.addColorStop(0.6,'rgba(255,255,255,0.45)');
@@ -321,10 +303,9 @@ function drawScene(){
         nowRaw < TIMELINE_START ? TIMELINE_START :
         nowRaw > TIMELINE_END   ? TIMELINE_END   : nowRaw;
 
-    // Very close vertical distance - like 1 day on x-axis
+    // Much further apart on parallel segments
     const centerY = height*0.5;
-    const oneDayWidth = (1/24/365) * TOTAL_DURATION / 1000 / 86400 * width;
-    const offset  = Math.min(height*0.08, oneDayWidth * 0.5);
+    const offset  = height*0.22;
 
     const bottomRadiusTime = BOTTOM_DURATION/2;
     const topRadiusTime    = TOP_DURATION/2;
