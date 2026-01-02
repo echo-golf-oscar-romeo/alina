@@ -22,7 +22,6 @@
             align-items:center;
             justify-content:center;
             gap:1.25rem;
-            transition: background-color 0.3s, color 0.3s;
         }
 
         .top-panel{
@@ -48,10 +47,10 @@
 
         .mode-toggle button{
             padding:0.25rem 0.75rem;
-            background:transparent;
-            color:currentColor;
+            background:#333333;
+            color:#dddddd;
             border-radius:999px;
-            border:1px solid currentColor;
+            border:1px solid #444444;
             cursor:pointer;
             opacity:0.5;
             transition: opacity 0.2s;
@@ -149,38 +148,6 @@ function updateCountdown(){
         const pctLeft = 100 - (done/total)*100;
         countdownEl.textContent = `${pctLeft.toFixed(1)}%`;
     }
-    updateTheme();
-}
-
-/* ---------- DYNAMIC THEME ---------- */
-function updateTheme(){
-    const now = new Date();
-    const total = END_GLOBAL - START_GLOBAL;
-    const done = Math.max(0, Math.min(total, now - START_GLOBAL));
-    const progress = done / total; // 0..1
-    
-    // Interpolate from #222222 (dark) to #f0f0f0 (almost white)
-    const startR = 0x22, startG = 0x22, startB = 0x22;
-    const endR = 0xf0, endG = 0xf0, endB = 0xf0;
-    
-    const r = Math.round(startR + (endR - startR) * progress);
-    const g = Math.round(startG + (endG - startG) * progress);
-    const b = Math.round(startB + (endB - startB) * progress);
-    
-    const bgColor = `rgb(${r},${g},${b})`;
-    document.body.style.backgroundColor = bgColor;
-    
-    // Text color: dark if light background, light if dark background
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    const textColor = brightness > 128 ? '#222222' : '#dddddd';
-    document.body.style.color = textColor;
-    
-    // Update button styles
-    const buttons = document.querySelectorAll('.mode-toggle button');
-    buttons.forEach(btn => {
-        btn.style.color = textColor;
-        btn.style.borderColor = textColor;
-    });
 }
 
 /* ---------- COLORS ---------- */
@@ -278,14 +245,14 @@ function drawWire(opts){
             
             if(isTop){
                 // Top arc is a BUMP UP (выпуклая наверх)
-                // Center is BELOW the baseline
-                const arcCenterY = yBase + arcRadiusPx;
+                // Center is on the baseline
+                const arcCenterY = yBase;
                 const angle = Math.PI * rel;
                 y = arcCenterY - arcRadiusPx * Math.sin(angle);
             }else{
                 // Bottom arc is a DIP DOWN (яма)
-                // Center is ABOVE the baseline
-                const arcCenterY = yBase - arcRadiusPx;
+                // Center is on the baseline
+                const arcCenterY = yBase;
                 const angle = Math.PI * rel;
                 y = arcCenterY + arcRadiusPx * Math.sin(angle);
             }
@@ -362,9 +329,9 @@ function drawScene(){
         nowRaw < TIMELINE_START ? TIMELINE_START :
         nowRaw > TIMELINE_END   ? TIMELINE_END   : nowRaw;
 
-    // Closer together
+    // 3.5x closer
     const centerY = height*0.5;
-    const offset  = height*0.08;
+    const offset  = height*0.08 / 3.5;
 
     const bottomRadiusTime = BOTTOM_DURATION/2;
     const topRadiusTime    = TOP_DURATION/2;
