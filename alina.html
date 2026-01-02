@@ -22,6 +22,7 @@
             align-items:center;
             justify-content:center;
             gap:1.25rem;
+            padding:20px;
         }
 
         .top-panel{
@@ -73,6 +74,123 @@
             background:#262626;
             display:block;
         }
+
+        .bottom-panel{
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:0.75rem;
+            margin-top:1rem;
+            width:94vw;
+            max-width:600px;
+        }
+
+        .miss-you-btn{
+            padding:0.5rem 1.5rem;
+            background:#333333;
+            color:#dddddd;
+            border-radius:8px;
+            border:1px solid #444444;
+            cursor:pointer;
+            font-size:0.95rem;
+            font-family:"Ubuntu Mono",ui-monospace,Menlo,Consolas,monospace;
+            transition: all 0.3s;
+        }
+        .miss-you-btn:hover{
+            background:#444444;
+            transform:scale(1.05);
+        }
+        .miss-you-btn.active{
+            background:#dddddd;
+            color:#222222;
+        }
+
+        .idea-input-group{
+            display:flex;
+            gap:0.5rem;
+            width:100%;
+        }
+
+        #idea-input{
+            flex:1;
+            padding:0.5rem 0.75rem;
+            background:#333333;
+            color:#dddddd;
+            border:1px solid #444444;
+            border-radius:6px;
+            font-family:"Ubuntu Mono",ui-monospace,Menlo,Consolas,monospace;
+            font-size:0.9rem;
+        }
+        #idea-input::placeholder{
+            color:#666666;
+        }
+        #idea-input:focus{
+            outline:none;
+            border-color:#dddddd;
+            box-shadow:0 0 8px rgba(221,221,221,0.2);
+        }
+
+        .add-idea-btn{
+            padding:0.5rem 1rem;
+            background:#333333;
+            color:#dddddd;
+            border:1px solid #444444;
+            border-radius:6px;
+            cursor:pointer;
+            font-size:0.9rem;
+            font-family:"Ubuntu Mono",ui-monospace,Menlo,Consolas,monospace;
+            transition:all 0.3s;
+        }
+        .add-idea-btn:hover{
+            background:#444444;
+        }
+
+        .ideas-list{
+            width:100%;
+            max-height:200px;
+            overflow-y:auto;
+            background:#262626;
+            border-radius:6px;
+            border:1px solid #444444;
+            padding:0.5rem;
+            font-size:0.85rem;
+            color:#cccccc;
+        }
+
+        .idea-item{
+            padding:0.5rem;
+            margin-bottom:0.3rem;
+            background:#333333;
+            border-radius:4px;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:0.5rem;
+        }
+
+        .idea-text{
+            flex:1;
+            word-break:break-word;
+        }
+
+        .remove-idea-btn{
+            padding:0.2rem 0.5rem;
+            background:#444444;
+            color:#dddddd;
+            border:none;
+            border-radius:3px;
+            cursor:pointer;
+            font-size:0.75rem;
+        }
+        .remove-idea-btn:hover{
+            background:#555555;
+        }
+
+        .info-text{
+            font-size:0.8rem;
+            opacity:0.7;
+            text-align:center;
+        }
     </style>
 </head>
 <body>
@@ -86,6 +204,21 @@
 
 <div id="canvas-container">
     <canvas id="canvas"></canvas>
+</div>
+
+<div class="bottom-panel">
+    <button class="miss-you-btn" id="miss-you-btn">miss you ❤️</button>
+    <div class="idea-input-group">
+        <input 
+            type="text" 
+            id="idea-input" 
+            placeholder="ideas for reunion..."
+            maxlength="80"
+        />
+        <button class="add-idea-btn" id="add-idea-btn">add</button>
+    </div>
+    <div class="ideas-list" id="ideas-list"></div>
+    <div class="info-text">stored locally in your browser</div>
 </div>
 
 <script>
@@ -109,7 +242,6 @@ const END_BOTTOM_ABS   = inTzOffset('2026-01-02T23:00',TZ);
 const START_TOP_ABS    = inTzOffset('2025-12-31T16:00',TZ);
 const END_TOP_ABS      = TARGET;
 
-// Expand timeline to show Dec 21 to Jan 15
 const TIMELINE_START = inTzOffset('2025-12-21T00:00',TZ);
 const TIMELINE_END   = inTzOffset('2026-01-15T00:00',TZ);
 const TOTAL_DURATION = TIMELINE_END - TIMELINE_START;
@@ -186,13 +318,11 @@ function resizeCanvas(){
 }
 window.addEventListener('resize', resizeCanvas);
 
-/* Helper: map time to x */
 function timeToX(t, width){
     const clamped = Math.min(TIMELINE_END, Math.max(TIMELINE_START,t));
     return ((clamped - TIMELINE_START)/TOTAL_DURATION)*width;
 }
 
-/* Subtle smoothing helper */
 function smoothPoint(p1, p2, p3){
     return {
         x: (p1.x + p2.x + p3.x) / 3,
@@ -200,7 +330,6 @@ function smoothPoint(p1, p2, p3){
     };
 }
 
-/* Core drawing for one wire with perfect half-circle arc */
 function drawWire(opts){
     const {
         yBase,
@@ -222,36 +351,27 @@ function drawWire(opts){
     const startX = 0;
     const endX   = width;
 
-    // Absence interval mapped to timeline parameter
     const tAbsStart = (startAbs - globalStart)/globalDuration;
     const tAbsEnd   = (endAbs   - globalStart)/globalDuration;
     const tAbsMid   = (tAbsStart + tAbsEnd)/2;
 
-    // Arc radius in pixels: half of absence duration, then 1.5x smaller
     const radiusFrac = arcRadiusTime / globalDuration;
     const arcRadiusPx = (radiusFrac * width) / 1.5;
 
-    // Arc center X at midpoint
     const arcCenterX = startX + (endX-startX)*tAbsMid;
 
-    // path in parameter t ∈ [0,1]
     function path(t){
         const x = startX + (endX-startX)*t;
         let y = yBase;
 
         if(t > tAbsStart && t < tAbsEnd){ 
-            // half-circle arc
-            const rel = (t - tAbsStart)/(tAbsEnd - tAbsStart); // 0..1
+            const rel = (t - tAbsStart)/(tAbsEnd - tAbsStart);
             
             if(isTop){
-                // Top arc is a BUMP UP (выпуклая наверх)
-                // Center is on the baseline
                 const arcCenterY = yBase;
                 const angle = Math.PI * rel;
                 y = arcCenterY - arcRadiusPx * Math.sin(angle);
             }else{
-                // Bottom arc is a DIP DOWN (яма)
-                // Center is on the baseline
                 const arcCenterY = yBase;
                 const angle = Math.PI * rel;
                 y = arcCenterY + arcRadiusPx * Math.sin(angle);
@@ -262,13 +382,12 @@ function drawWire(opts){
     }
 
     function strokeSegment(t0,t1,color){
-        const steps = 300;
+        const steps = 600; // 2x more smoothing
         ctx.beginPath();
         for(let i=0;i<=steps;i++){
             const t = t0 + (t1-t0)*i/steps;
             let p = path(t);
             
-            // Subtle smoothing: use neighbor points
             if(i > 0 && i < steps){
                 const prevT = t0 + (t1-t0)*(i-1)/steps;
                 const nextT = t0 + (t1-t0)*(i+1)/steps;
@@ -289,16 +408,13 @@ function drawWire(opts){
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
 
-    // main colored part
     ctx.shadowColor = colorMain;
     ctx.shadowBlur = 6;
     strokeSegment(0, tSplit, colorMain);
 
-    // future part with weaker glow
     ctx.shadowBlur = 2;
     strokeSegment(tSplit, 1, colorFuture);
 
-    // glowing current marker - using smoothed position
     let markerPos = path(tSplit);
     if(tSplit > 0.001 && tSplit < 0.999){
         const pPrev = path(Math.max(0, tSplit - 0.01));
@@ -329,7 +445,6 @@ function drawScene(){
         nowRaw < TIMELINE_START ? TIMELINE_START :
         nowRaw > TIMELINE_END   ? TIMELINE_END   : nowRaw;
 
-    // 3.5x closer
     const centerY = height*0.5;
     const offset  = height*0.08 / 3.5;
 
@@ -365,11 +480,100 @@ function drawScene(){
     });
 }
 
-/* ---------- LOOPS ---------- */
+/* ---------- MISS YOU BUTTON ---------- */
+const missYouBtn = document.getElementById('miss-you-btn');
+let missYouCount = 0;
+
+function loadMissYouCount(){
+    const stored = localStorage.getItem('missYouCount');
+    missYouCount = stored ? parseInt(stored) : 0;
+    updateMissYouDisplay();
+}
+
+function updateMissYouDisplay(){
+    if(missYouCount === 0){
+        missYouBtn.textContent = 'miss you ❤️';
+    }else{
+        missYouBtn.textContent = `miss you ❤️ (${missYouCount})`;
+    }
+}
+
+missYouBtn.onclick = () => {
+    missYouCount++;
+    localStorage.setItem('missYouCount', missYouCount);
+    updateMissYouDisplay();
+    missYouBtn.classList.add('active');
+    setTimeout(() => missYouBtn.classList.remove('active'), 300);
+};
+
+/* ---------- IDEAS LIST ---------- */
+const ideaInput = document.getElementById('idea-input');
+const addIdeaBtn = document.getElementById('add-idea-btn');
+const ideasList = document.getElementById('ideas-list');
+let ideas = [];
+
+function loadIdeas(){
+    const stored = localStorage.getItem('reunionIdeas');
+    ideas = stored ? JSON.parse(stored) : [];
+    renderIdeas();
+}
+
+function saveIdeas(){
+    localStorage.setItem('reunionIdeas', JSON.stringify(ideas));
+}
+
+function renderIdeas(){
+    ideasList.innerHTML = '';
+    if(ideas.length === 0){
+        ideasList.innerHTML = '<div style="text-align:center;opacity:0.5;">no ideas yet...</div>';
+        return;
+    }
+    ideas.forEach((idea, idx) => {
+        const item = document.createElement('div');
+        item.className = 'idea-item';
+        item.innerHTML = `
+            <div class="idea-text">${escapeHtml(idea)}</div>
+            <button class="remove-idea-btn" onclick="removeIdea(${idx})">✕</button>
+        `;
+        ideasList.appendChild(item);
+    });
+}
+
+function addIdea(){
+    const text = ideaInput.value.trim();
+    if(text === '') return;
+    ideas.push(text);
+    saveIdeas();
+    ideaInput.value = '';
+    renderIdeas();
+}
+
+function removeIdea(idx){
+    ideas.splice(idx, 1);
+    saveIdeas();
+    renderIdeas();
+}
+
+function escapeHtml(text){
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+addIdeaBtn.onclick = addIdea;
+ideaInput.onkeypress = (e) => {
+    if(e.key === 'Enter') addIdea();
+};
+
+/* ---------- INITIALIZATION ---------- */
 resizeCanvas();
 updateCountdown();
-setInterval(updateCountdown,1000);
-setInterval(drawScene,1000);
+loadMissYouCount();
+loadIdeas();
+
+setInterval(updateCountdown, 1000);
+setInterval(drawScene, 1000);
 </script>
 </body>
 </html>
+
