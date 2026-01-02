@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <title>Countdown & Reunion Wires</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
-
-    <!-- Ubuntu Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Ubuntu+Mono:wght@400;700&display=swap" rel="stylesheet">
-
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{
@@ -22,331 +19,202 @@
             align-items:center;
             justify-content:center;
             gap:1.5rem;
+            padding:1rem;
         }
-
-        .top-panel{
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            gap:0.5rem;
-        }
-
-        #countdown{
-            font-size:clamp(2.4rem,5vw,3.2rem);
-            font-weight:400;
-            font-variant-numeric:tabular-nums;
-        }
-
-        .mode-toggle{
-            display:flex;
-            align-items:center;
-            gap:0.5rem;
-            font-size:0.9rem;
-            opacity:0.85;
-        }
-
-        .mode-toggle button{
-            padding:0.25rem 0.75rem;
-            background:#333333;
-            color:#dddddd;
-            border-radius:999px;
-            border:1px solid #444444;
-            cursor:pointer;
-        }
-        .mode-toggle button.active{
-            background:#dddddd;
-            color:#222222;
-        }
-
-        #canvas-container{
-            width:90vw;
-            max-width:900px;
-            height:55vh;
-            max-height:420px;
-        }
-        canvas{
-            width:100%;
-            height:100%;
-            border-radius:10px;
-            background:#262626;
-        }
+        .top-panel{display:flex;flex-direction:column;align-items:center;gap:0.5rem;}
+        #countdown{font-size:clamp(2.2rem,5vw,3rem);font-weight:400;font-variant-numeric:tabular-nums;}
+        .mode-toggle{display:flex;align-items:center;gap:0.5rem;font-size:0.9rem;opacity:0.85;}
+        .mode-toggle button{padding:0.25rem 0.75rem;background:#333;color:#ddd;border-radius:999px;border:1px solid #444;cursor:pointer;}
+        .mode-toggle button.active{background:#ddd;color:#222;}
+        #canvas-container{width:100%;max-width:900px;height:clamp(300px,55vh,420px);}
+        canvas{width:100%;height:100%;border-radius:10px;background:#262626;display:block;}
     </style>
 </head>
 <body>
 <div class="top-panel">
-    <div id="countdown">--:--:--</div>
+    <div id="countdown">--:--:--:--</div>
     <div class="mode-toggle">
-        <span>view:</span>
-        <button id="mode-time" class="active">time left</button>
-        <button id="mode-percent">percent done</button>
+        <button id="mode-countdown" class="active">countdown</button>
+        <button id="mode-percent">% left</button>
     </div>
 </div>
-
 <div id="canvas-container">
     <canvas id="canvas"></canvas>
 </div>
 
 <script>
-/* ---------- TIME CONSTANTS (ALL IN UTC+8) ---------- */
-function inTzOffset(dateStr, offsetHours){
-    // create date as if in given offset
-    const d = new Date(dateStr + ':00'); // assume local ISO without offset
-    const localOffset = d.getTimezoneOffset()/60;
-    const diff = offsetHours + localOffset;
-    return new Date(d.getTime() - diff*3600*1000);
+/* TIME CONSTANTS (UTC+8) */
+function inTzOffset(dateStr,offsetHours){
+    const d=new Date(dateStr+':00');
+    const localOffset=d.getTimezoneOffset()/60;
+    return new Date(d.getTime()-(offsetHours+localOffset)*3600*1000);
 }
+const TZ=8;
+const TARGET=inTzOffset('2026-01-11T16:45',TZ);
+const START_GLOBAL=inTzOffset('2025-12-25T18:00',TZ);
+const START_BOTTOM=inTzOffset('2025-12-25T18:00',TZ);
+const END_BOTTOM=inTzOffset('2026-01-02T23:00',TZ);
+const START_TOP=inTzOffset('2025-12-31T16:00',TZ);
+const TIMELINE_START=START_BOTTOM;
+const TIMELINE_END=TARGET;
+const TOTAL_DURATION=TIMELINE_END-TIMELINE_START;
 
-// timeline and important moments in UTC+8
-const TZ = 8;
-const TARGET = inTzOffset('2026-01-11T16:45',TZ);
-const START_GLOBAL = inTzOffset('2025-12-25T18:00',TZ);              // global start for % mode
-const END_GLOBAL   = TARGET;                                         // global end for % mode
+/* COUNTDOWN MODE */
+let mode='countdown';
+const countdownEl=document.getElementById('countdown');
+const btnCountdown=document.getElementById('mode-countdown');
+const btnPercent=document.getElementById('mode-percent');
 
-const START_BOTTOM_ABS = inTzOffset('2025-12-25T18:00',TZ);
-const END_BOTTOM_ABS   = inTzOffset('2026-01-02T23:00',TZ);
-
-const START_TOP_ABS    = inTzOffset('2025-12-31T16:00',TZ);
-const END_TOP_ABS      = TARGET;
-
-const TIMELINE_START = START_BOTTOM_ABS;
-const TIMELINE_END   = TARGET;
-const TOTAL_DURATION = TIMELINE_END - TIMELINE_START;
-
-const BOTTOM_DURATION = END_BOTTOM_ABS - START_BOTTOM_ABS; // 8 days → radius 4 units
-const TOP_DURATION    = END_TOP_ABS   - START_TOP_ABS;
-
-/* ---------- COUNTDOWN / PERCENT SWITCH ---------- */
-let mode = 'time'; // 'time' or 'percent'
-
-const countdownEl = document.getElementById('countdown');
-const btnTime = document.getElementById('mode-time');
-const btnPercent = document.getElementById('mode-percent');
-
-btnTime.onclick = () => { mode='time'; btnTime.classList.add('active'); btnPercent.classList.remove('active'); };
-btnPercent.onclick = () => { mode='percent'; btnPercent.classList.add('active'); btnTime.classList.remove('active'); };
+btnCountdown.onclick=()=>{mode='countdown';btnCountdown.classList.add('active');btnPercent.classList.remove('active');};
+btnPercent.onclick=()=>{mode='percent';btnPercent.classList.add('active');btnCountdown.classList.remove('active');};
 
 function updateCountdown(){
-    const now = new Date();
-    if(mode === 'time'){
-        const delta = TARGET - now;
-        if(delta <= 0){
-            countdownEl.textContent = '00:00:00';
+    const now=new Date();
+    if(mode==='countdown'){
+        const delta=TARGET-now;
+        if(delta<=0){
+            countdownEl.textContent='00d 00h 00m 00s';
             return;
         }
-        const s = Math.floor(delta/1000);
-        const h = Math.floor(s/3600);
-        const m = Math.floor((s%3600)/60);
-        const sec = s%60;
-        countdownEl.textContent =
-            `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+        const s=Math.floor(delta/1000);
+        const days=Math.floor(s/86400);
+        const hours=Math.floor((s%86400)/3600);
+        const mins=Math.floor((s%3600)/60);
+        const secs=s%60;
+        countdownEl.textContent=`${days.toString().padStart(2,'0')}d ${hours.toString().padStart(2,'0')}h ${mins.toString().padStart(2,'0')}m ${secs.toString().padStart(2,'0')}s`;
     }else{
-        const total = END_GLOBAL - START_GLOBAL;
-        const done = Math.max(0, Math.min(total, now - START_GLOBAL));
-        const pct = (done/total)*100;
-        countdownEl.textContent = `${pct.toFixed(1)}%`;
+        const total=TARGET-START_GLOBAL;
+        const remaining=Math.max(0,total-(now-START_GLOBAL));
+        const pct=(remaining/total)*100;
+        countdownEl.textContent=`${pct.toFixed(1)}% left`;
     }
 }
 
-/* ---------- COLORS ---------- */
+/* COLORS */
 function randomBrightPair(){
-    const h1 = Math.floor(Math.random()*360);
-    const h2 = (h1 + 120 + Math.floor(Math.random()*60))%360;
-    const s1 = 70 + Math.random()*25;
-    const s2 = 70 + Math.random()*25;
-    const l  = 55 + Math.random()*15;
-    return [
-        `hsl(${h1},${s1}%,${l}%)`,
-        `hsl(${h2},${s2}%,${l}%)`
-    ];
+    const h1=Math.floor(Math.random()*360);
+    const h2=(h1+120+Math.floor(Math.random()*60))%360;
+    const s1=70+Math.random()*25;
+    const s2=70+Math.random()*25;
+    const l=55+Math.random()*15;
+    return [`hsl(${h1},${s1}%,${l}%)`,`hsl(${h2},${s2}%,${l}%)`];
 }
-const [colorTop,colorBottom] = randomBrightPair();
-const colorTopGray    = 'hsl(0,0%,55%)';
-const colorBottomGray = 'hsl(0,0%,55%)';
+const [colorTop,colorBottom]=randomBrightPair();
+const colorGray='#666666';
 
-/* ---------- CANVAS DRAWING ---------- */
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+/* CANVAS */
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
 
 function resizeCanvas(){
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    const rect=canvas.getBoundingClientRect();
+    canvas.width=rect.width*window.devicePixelRatio;
+    canvas.height=rect.height*window.devicePixelRatio;
     ctx.setTransform(window.devicePixelRatio,0,0,window.devicePixelRatio,0,0);
     drawScene();
 }
-window.addEventListener('resize', resizeCanvas);
+window.addEventListener('resize',resizeCanvas);
 
-/* Parametric piecewise line: straight → half circle → sin/cos */
-function drawWire(opts){
-    const {
-        yBase,
-        colorMain,
-        colorFuture,
-        startAbs,
-        endAbs,
-        globalStart,
-        globalEnd,
-        radiusTime,      // in ms (half of absence length)
-        now,
-        isTop
-    } = opts;
-
-    const width = canvas.width / window.devicePixelRatio;
-    const height = canvas.height / window.devicePixelRatio;
-
-    const globalDuration = globalEnd - globalStart;
-
-    // map time to x in [0,width]
-    function tToX(t){
-        const clamped = Math.min(globalEnd, Math.max(globalStart,t));
-        return ((clamped - globalStart)/globalDuration)*width;
-    }
-
-    const startX = tToX(globalStart);
-    const endX   = tToX(globalEnd);
-
-    // absence interval
-    const absStart = startAbs;
-    const absEnd   = endAbs;
-    const absMid   = new Date(absStart.getTime() + (absEnd-absStart)/2);
-
-    const absRadiusMs = radiusTime;
-    const absRadiusDayFraction = absRadiusMs / globalDuration;
-    const arcRadiusPx = (endX-startX) * absRadiusDayFraction;
-
-    const nowX = tToX(now);
-
-    // helper for color split: draw piecewise up to current
-    function strokePath(pathFn, t0, t1){
-        const steps = 300;
-        function segmentStroke(tA,tB,color){
-            ctx.beginPath();
-            for(let i=0;i<=steps;i++){
-                const tt = tA + (tB-tA)*i/steps;
-                const {x,y} = pathFn(tt);
-                if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-            }
-            ctx.strokeStyle = color;
-            ctx.stroke();
-        }
-        const tNow = (now - globalStart)/globalDuration;
-        const tStart = t0;
-        const tEnd = t1;
-        const tSplit = Math.max(tStart, Math.min(tEnd, tNow));
-
-        if(tSplit>tStart){
-            segmentStroke(tStart,tSplit,colorMain);
-        }
-        if(tEnd>tSplit){
-            segmentStroke(tSplit,tEnd,colorFuture);
-        }
-    }
-
-    // Build path func: piecewise
-    const tAbsStart = (absStart - globalStart)/globalDuration;
-    const tAbsMid   = (absMid   - globalStart)/globalDuration;
-    const tAbsEnd   = (absEnd   - globalStart)/globalDuration;
-
-    const sinStartT = tAbsMid; // after top of arc
-    const sinEndT   = 1;
-
-    const baseAmp = (canvas.height / window.devicePixelRatio)*0.06;
-    const sinFreq = 8*Math.PI; // total phase
-
-    function path(t){
-        const x = startX + (endX-startX)*t;
-        let y = yBase;
-
-        if(t<tAbsStart){ // straight
-            y = yBase;
-        }else if(t<tAbsEnd){ // half circle
-            const a = (t - tAbsStart)/(tAbsEnd - tAbsStart); // 0..1
-            const angle = isTop
-                ? Math.PI + a*Math.PI   // upper arc
-                : 0 + a*Math.PI;        // lower arc
-            const cx = startX + (endX-startX)*((tAbsStart+tAbsEnd)/2);
-            const cy = isTop ? yBase - arcRadiusPx : yBase + arcRadiusPx;
-            y = cy + arcRadiusPx*Math.sin(angle);
-        }else{ // intertwining sin/cos
-            const u = (t - sinStartT)/(sinEndT - sinStartT);
-            const phase = sinFreq*u;
-            const amp = baseAmp;
-            if(isTop){
-                y = yBase - Math.sin(phase)*amp;
-            }else{
-                y = yBase + Math.cos(phase)*amp;
-            }
-        }
-        return {x,y};
-    }
-
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-
-    strokePath(path,0,1);
-
-    // glowing mark at the end of colored part (same x for both wires)
-    const markerX = nowX;
-    const {y: yAtNow} = path((now - globalStart)/globalDuration);
-    const gradient = ctx.createRadialGradient(markerX,yAtNow,0,markerX,yAtNow,16);
-    gradient.addColorStop(0,'rgba(255,255,255,0.9)');
-    gradient.addColorStop(0.4,'rgba(255,255,255,0.4)');
-    gradient.addColorStop(1,'rgba(255,255,255,0)');
-    ctx.fillStyle = gradient;
+function drawWire(ctx,colorMain,colorFuture,yBase,nowX,globalStart,globalEnd,width){
+    ctx.lineWidth=3;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    
+    // SMOOTH TRANSITION TO ARC WITH BEZIER
+    const arcStartFrac=0.4;
+    const arcFrac=0.15;
+    const arcCenterX=arcStartFrac*width;
+    const arcRadius=arcFrac*width*0.5;
+    
+    ctx.shadowBlur=12;
+    ctx.shadowColor=colorMain;
+    
+    // MAIN COLORED PART UP TO NOW
+    ctx.strokeStyle=colorMain;
+    ctx.lineWidth=3;
     ctx.beginPath();
-    ctx.arc(markerX,yAtNow,16,0,Math.PI*2);
-    ctx.fill();
+    ctx.moveTo(0,yBase);
+    
+    // BEZIER TO ARC START (SMOOTH)
+    const arcStartX=(arcStartFrac-0.1)*width;
+    const cp1x=arcStartX*0.5;
+    const cp1y=isTop?yBase-10:yBase+10;
+    const cp2x=arcStartX*0.8;
+    const cp2y=isTop?yBase-15:yBase+15;
+    ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,arcStartX,yBase);
+    
+    // CIRCULAR ARC
+    const arcAngle=Math.PI;
+    const arcStartAngle=isTop?Math.PI:0;
+    ctx.arc(arcCenterX,isTop?yBase-arcRadius:yBase+arcRadius,arcRadius,arcStartAngle,arcStartAngle+arcAngle);
+    
+    // BEZIER BACK TO STRAIGHT (SMOOTH)
+    const arcEndX=(arcStartFrac+arcFrac)*width;
+    const cp3x=arcEndX*0.7;
+    const cp4x=arcEndX*0.9;
+    const cp3y=isTop?yBase+8:yBase-8;
+    const cp4y=isTop?yBase+3:yBase-3;
+    ctx.bezierCurveTo(cp3x,cp3y,cp4x,cp4y,arcEndX,yBase);
+    
+    // STRAIGHT TO CURRENT
+    ctx.lineTo(Math.min(nowX,width),yBase);
+    ctx.stroke();
+    
+    // GRAY FUTURE PART (LOW GLOW)
+    ctx.shadowBlur=2;
+    ctx.shadowColor=colorGray;
+    ctx.strokeStyle=colorGray;
+    ctx.lineWidth=2.5;
+    ctx.beginPath();
+    ctx.moveTo(Math.max(nowX,arcEndX),yBase);
+    ctx.lineTo(width,yBase);
+    ctx.stroke();
+    ctx.shadowBlur=0;
 }
 
 function drawScene(){
-    const width = canvas.width / window.devicePixelRatio;
-    const height = canvas.height / window.devicePixelRatio;
+    const width=canvas.width/window.devicePixelRatio;
+    const height=canvas.height/window.devicePixelRatio;
     ctx.clearRect(0,0,width,height);
-
-    const now = new Date();
-    const nowClamped = now < TIMELINE_START ? TIMELINE_START :
-                       now > TIMELINE_END   ? TIMELINE_END   : now;
-
-    const centerY = height*0.5;
-    const offsetY = height*0.14;
-
-    // radiusTime = half of absence duration
-    const bottomRadiusTime = (END_BOTTOM_ABS - START_BOTTOM_ABS)/2;
-    const topRadiusTime    = (END_TOP_ABS   - START_TOP_ABS)/2;
-
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = colorBottom;
-    drawWire({
-        yBase: centerY + offsetY,
-        colorMain: colorBottom,
-        colorFuture: colorBottomGray,
-        startAbs: START_BOTTOM_ABS,
-        endAbs: END_BOTTOM_ABS,
-        globalStart: TIMELINE_START,
-        globalEnd: TIMELINE_END,
-        radiusTime: bottomRadiusTime,
-        now: nowClamped,
-        isTop:false
-    });
-
-    ctx.shadowColor = colorTop;
-    drawWire({
-        yBase: centerY - offsetY,
-        colorMain: colorTop,
-        colorFuture: colorTopGray,
-        startAbs: START_TOP_ABS,
-        endAbs: END_TOP_ABS,
-        globalStart: TIMELINE_START,
-        globalEnd: TIMELINE_END,
-        radiusTime: topRadiusTime,
-        now: nowClamped,
-        isTop:true
-    });
-
-    ctx.shadowBlur = 0;
+    
+    const now=new Date();
+    const progress=(now-TIMELINE_START)/TOTAL_DURATION;
+    const nowX=progress*width;
+    
+    const centerY=height*0.52;
+    const wireSep=height*0.08; // closer wires
+    
+    const yTop=centerY-wireSep;
+    const yBottom=centerY+wireSep;
+    
+    // TOP WIRE (smaller arc)
+    drawWire(ctx,colorTop,colorGray,yTop,nowX,TIMELINE_START,TIMELINE_END,width,true);
+    
+    // BOTTOM WIRE (larger arc)
+    drawWire(ctx,colorBottom,colorGray,yBottom,nowX,TIMELINE_START,TIMELINE_END,width,false);
+    
+    // SMALL CONCENTRATED GLOW MARK (SAME X)
+    const glowSize=10;
+    const glowGradient=ctx.createRadialGradient(nowX,yTop,0,nowX,yTop,glowSize);
+    glowGradient.addColorStop(0,'rgba(255,255,255,1)');
+    glowGradient.addColorStop(0.3,'rgba(255,255,255,0.6)');
+    glowGradient.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=glowGradient;
+    ctx.beginPath();
+    ctx.arc(nowX,yTop,glowSize,0,Math.PI*2);
+    ctx.fill();
+    
+    const glowGradient2=ctx.createRadialGradient(nowX,yBottom,0,nowX,yBottom,glowSize);
+    glowGradient2.addColorStop(0,'rgba(255,255,255,1)');
+    glowGradient2.addColorStop(0.3,'rgba(255,255,255,0.6)');
+    glowGradient2.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=glowGradient2;
+    ctx.beginPath();
+    ctx.arc(nowX,yBottom,glowSize,0,Math.PI*2);
+    ctx.fill();
 }
 
-/* ---------- LOOPS ---------- */
+/* INIT */
 resizeCanvas();
 updateCountdown();
 setInterval(updateCountdown,1000);
