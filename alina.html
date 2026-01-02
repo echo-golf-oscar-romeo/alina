@@ -273,21 +273,21 @@ function drawWire(opts){
         let y = yBase;
 
         if(t > tAbsStart && t < tAbsEnd){ 
-            // half-circle arc (REVERSED), NO OFFSET - starts and ends on the baseline
+            // half-circle arc
             const rel = (t - tAbsStart)/(tAbsEnd - tAbsStart); // 0..1
             
             if(isTop){
-                // Top arc points DOWN (reversed): arc goes below the baseline
-                // Center is ABOVE the baseline by arcRadiusPx
-                const arcCenterY = yBase - arcRadiusPx;
-                const angle = Math.PI * (1 - rel);
-                y = arcCenterY + arcRadiusPx * Math.sin(angle);
-            }else{
-                // Bottom arc points UP (reversed): arc goes above the baseline
-                // Center is BELOW the baseline by arcRadiusPx
+                // Top arc is a BUMP UP (выпуклая наверх)
+                // Center is BELOW the baseline
                 const arcCenterY = yBase + arcRadiusPx;
-                const angle = Math.PI * (1 - rel);
+                const angle = Math.PI * rel;
                 y = arcCenterY - arcRadiusPx * Math.sin(angle);
+            }else{
+                // Bottom arc is a DIP DOWN (яма)
+                // Center is ABOVE the baseline
+                const arcCenterY = yBase - arcRadiusPx;
+                const angle = Math.PI * rel;
+                y = arcCenterY + arcRadiusPx * Math.sin(angle);
             }
         }
 
@@ -362,9 +362,9 @@ function drawScene(){
         nowRaw < TIMELINE_START ? TIMELINE_START :
         nowRaw > TIMELINE_END   ? TIMELINE_END   : nowRaw;
 
-    // Significantly closer together
+    // Closer together
     const centerY = height*0.5;
-    const offset  = height*0.12;
+    const offset  = height*0.08;
 
     const bottomRadiusTime = BOTTOM_DURATION/2;
     const topRadiusTime    = TOP_DURATION/2;
