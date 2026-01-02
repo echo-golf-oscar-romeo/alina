@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Countdown & Reunion Wires</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Lato', sans-serif;
+            background-color: #222222;
+            color: #dddddd;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #countdown {
+            font-size: clamp(4rem, 12vw, 8rem);
+            font-weight: 300;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        #canvas-container {
+            width: 90vw;
+            max-width: 1200px;
+            height: 50vh;
+            max-height: 400px;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .labels {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            font-weight: 400;
+            opacity: 0.8;
+            z-index: 10;
+        }
+
+        .label-left {
+            color: hsl(0, 0%, 80%);
+        }
+
+        .label-right {
+            color: hsl(0, 0%, 60%);
+        }
+
+        .current-mark {
+            position: absolute;
+            font-size: 0.9rem;
+            font-weight: 700;
+            z-index: 10;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="countdown">--:--:--</div>
+    <div id="canvas-container">
+        <div class="labels">
+            <span class="label-left">Jan 25 '25 18:00</span>
+            <span class="label-right">Jan 11 '26 16:45</span>
+        </div>
+        <canvas id="canvas"></canvas>
+        <div id="current-mark" class="current-mark"></div>
+    </div>
+
+    <script>
+        // Dates
+        const TARGET = new Date('2026-01-11T16:45:00');
+        const START_BOTTOM = new Date('2025-01-25T18:00:00');
+        const END_BOTTOM = new Date('2026-01-02T23:00:00');
+        const START_TOP = new Date('2025-12-31T16:00:00');
+
+        // Timeline from START_BOTTOM to TARGET
+        const TIMELINE_START = START_BOTTOM;
+        const TIMELINE_END = TARGET;
+        const TOTAL_DURATION = TIMELINE_END - TIMELINE_START;
+
+        // Bottom arc: START_BOTTOM to END_BOTTOM
+        const BOTTOM_DURATION = END_BOTTOM - START_BOTTOM;
+
+        // Top arc: START_TOP to TARGET
+        const TOP_START_OFFSET = START_TOP - TIMELINE_START;
+        const TOP_DURATION = TIMELINE_END - START_TOP;
+
+        // Generate random paired bright contrasting colors
+        function randomBrightHSL(seed = Math.random()) {
+            const h1 = (seed * 360) | 0;
+            const h2 = ((h1 + 120 + (Math.random() * 120 | 0)) % 360);
+            const s1 = 70 + Math.random() * 30;
+            const s2 = 70 + Math.random() * 30;
+            const l = 60 + Math.random() * 20;
+            return [
+                `hsl(${h1}, ${s1}%, ${l}%)`,
+                `hsl(${h2}, ${s2}%, ${l}%)`
+            ];
+        }
+
+        const [colorTop, colorBottom] = randomBrightHSL();
+
+        const colorTopGray = `hsl(${parseInt(colorTop.match(/\d+/g)[0])}, 0%, 70%)`;
+        const colorBottomGray = `hsl(${parseInt(colorBottom.match(/\d+/g)[0])}, 0%, 70%)`;
+
+        // Update countdown
+        function updateCountdown() {
+            const now = new Date();
+            const delta = TARGET - now;
+
+            if (delta > 0) {
+                const seconds = Math.floor(delta / 1000);
+                const days = Math.floor(seconds / 86400);
+                const hours = Math.floor((seconds % 86400) / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                const secs = seconds % 60;
+                document.getElementById('countdown').textContent = 
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                document.getElementById('countdown').textContent = '00:00:00';
+            }
+        }
+
+        // Draw wires
+        function drawWires(ctx, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const width = canvas.width;
+            const height = canvas.height;
+            ctx.clearRect(0, 0, width, height);
+
+            const cy = height * 0.5;
+            const wireOffset = height * 0.15;
+            const r = Math.min(wireOffset * 0.8, 40);
+
+            const now = new Date();
+            const progress = Math.min((now - TIMELINE_START) / TOTAL_DURATION, 1);
+
+            const currentX = progress * width;
+
+            // Draw bottom wire (me)
+            ctx.strokeStyle = colorBottom;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowColor = colorBottom;
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            let x = 0;
+            ctx.moveTo(x, cy + wireOffset);
+            // Straight left
+            const bottomArcStartProg = (END_BOTTOM - START_BOTTOM) / TOTAL_DURATION; // ~0.98
+            if (progress > 0) {
+                const arcProg = Math.min(progress / bottomArcStartProg, 1);
+                const arcCenterX = width * 0.3;
+                const startAngle = -Math.PI / 2;
+                const endAngle = startAngle + Math.PI * arcProg;
+                // Line to arc start
+                ctx.lineTo(arcCenterX - r, cy + wireOffset);
+                // Arc down
+                ctx.arc(arcCenterX, cy + wireOffset + r, r, startAngle, endAngle);
+                x = arcCenterX + r * Math.sin(endAngle);
+                ctx.lineTo(x, cy + wireOffset);
+            }
+            ctx.stroke();
+
+            // Draw up to current if before end
+            if (progress < bottomArcStartProg) {
+                const currProg = progress / bottomArcStartProg;
+                const arcCenterX = width * 0.3;
+                const angle = -Math.PI / 2 + Math.PI * currProg;
+                const currX = arcCenterX + r * Math.sin(angle);
+                const currY = cy + wireOffset + r * (1 - Math.cos(angle));
+                ctx.beginPath();
+                ctx.moveTo(0, cy + wireOffset);
+                ctx.lineTo(arcCenterX - r, cy + wireOffset);
+                ctx.arc(arcCenterX, cy + wireOffset + r, r, -Math.PI/2, angle);
+                ctx.stroke();
+            }
+
+            // Draw top wire (friend)
+            ctx.strokeStyle = colorTop;
+            ctx.shadowColor = colorTop;
+            ctx.beginPath();
+            x = 0;
+            ctx.moveTo(x, cy - wireOffset);
+            // Top arc start prog
+            const topArcStartProg = TOP_START_OFFSET / TOTAL_DURATION;
+            const topArcEndProg = 1;
+            if (progress > topArcStartProg) {
+                const arcProg = Math.min((progress - topArcStartProg) / (1 - topArcStartProg), 1);
+                const arcCenterX2 = width * 0.25;
+                const startAngle2 = Math.PI / 2;
+                const endAngle2 = startAngle2 - Math.PI * arcProg;
+                ctx.lineTo(arcCenterX2 - r, cy - wireOffset);
+                ctx.arc(arcCenterX2, cy - wireOffset - r, r, startAngle2, endAngle2);
+                x = arcCenterX2 + r * Math.sin(endAngle2);
+                ctx.lineTo(x, cy - wireOffset);
+            }
+            ctx.stroke();
+
+            // Colored up to current for top
+            const topCurrProg = Math.max(0, (now - START_TOP) / TOP_DURATION);
+            const topArcCenterX = width * 0.25;
+            const topAngle = Math.PI / 2 - Math.PI * Math.min(topCurrProg, 1);
+            const topCurrX = topArcCenterX + r * Math.sin(topAngle);
+            ctx.beginPath();
+            ctx.moveTo(0, cy - wireOffset);
+            if (topCurrProg > 0) {
+                ctx.lineTo(topArcCenterX - r, cy - wireOffset);
+                ctx.arc(topArcCenterX, cy - wireOffset - r, r, Math.PI/2, topAngle);
+            }
+            ctx.stroke();
+
+            // Gray parts after current
+            ctx.shadowBlur = 0;
+
+            // Top gray
+            ctx.strokeStyle = colorTopGray;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            const topEndX = topCurrX;
+            ctx.moveTo(topEndX, cy - wireOffset);
+            ctx.lineTo(width, cy - wireOffset);
+            ctx.stroke();
+
+            // Bottom gray
+            ctx.strokeStyle = colorBottomGray;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            const bottomCurrX = Math.min(currentX, width * bottomArcStartProg);
+            ctx.moveTo(bottomCurrX, cy + wireOffset);
+            ctx.lineTo(width, cy + wireOffset);
+            ctx.stroke();
+
+            // Intertwine simulation after arcs - simple sine waves
+            const interStartX = Math.max(Math.max(topEndX, bottomCurrX), width * 0.5);
+            const interFreq = 0.02;
+            const interAmp = 10;
+            ctx.strokeStyle = colorTopGray;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(interStartX, cy - wireOffset);
+            for (let ix = interStartX; ix <= width; ix += 2) {
+                const t = (ix - interStartX) / (width - interStartX);
+                const y1 = cy - wireOffset + Math.sin(t * Math.PI * 4) * interAmp * 0.5;
+                ctx.lineTo(ix, y1);
+            }
+            ctx.stroke();
+
+            ctx.strokeStyle = colorBottomGray;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(interStartX, cy + wireOffset);
+            for (let ix = interStartX; ix <= width; ix += 2) {
+                const t = (ix - interStartX) / (width - interStartX);
+                const y2 = cy + wireOffset - Math.sin(t * Math.PI * 4 + Math.PI) * interAmp * 0.5;
+                ctx.lineTo(ix, y2);
+            }
+            ctx.stroke();
+
+            // Current moment glowing mark
+            const glowSize = 20;
+            const gradient = ctx.createRadialGradient(currentX, cy, 0, currentX, cy, glowSize);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.8)');
+            gradient.addColorStop(0.5, 'rgba(255,255,255,0.3)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(currentX, cy, glowSize, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Update mark label
+            const markEl = document.getElementById('current-mark');
+            markEl.textContent = now.toLocaleDateString('en-CA', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false});
+            markEl.style.left = `${currentX}px`;
+            markEl.style.top = `${cy - 15}px`;
+            markEl.style.color = '#ffffff';
+            markEl.style.textShadow = '0 0 10px rgba(255,255,255,0.8)';
+        }
+
+        // Init canvas
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            drawWires(ctx, canvas);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        updateCountdown();
+        setInterval(updateCountdown, 1000);
+        setInterval(() => {
+            resizeCanvas();
+        }, 1000);
+
+        // Initial draw
+        drawWires(ctx, canvas);
+    </script>
+</body>
+</html>
